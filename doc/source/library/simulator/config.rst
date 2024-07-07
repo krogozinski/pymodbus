@@ -198,7 +198,7 @@ The second form uses 1 shared block, most modern devices use this form for 2 mai
 
 .. image:: modbuscommonblock.png
 
-When reading holding register 1 the same phyical register is accessed as when reading input register 1.
+When reading holding register 1 the same physical register is accessed as when reading input register 1.
 Each block references the same physical register memory, in other words the size of the needed memory is the size of the largest block.
 
 The datastore simulator supports both types.
