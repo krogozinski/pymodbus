@@ -3,6 +3,7 @@
 import asyncio
 import copy
 import json
+import sys
 from unittest.mock import mock_open, patch
 
 import pytest
@@ -20,8 +21,36 @@ FX_WRITE_BIT = 5
 FX_WRITE_REG = 6
 
 
+def custom_action3(_registers, _inx, cell, func_code):
+    """Test action which includes function code"""
+    # Write single register
+    if func_code == 6 and not custom_action3.action_performed:
+        cell.value = 0x5555
+        custom_action3.action_performed = True
+    else:
+        custom_action3.action_performed = False
+
+
+custom_action3.action_performed = False
+
+
+def custom_actions_test_module():
+    module_contents = (
+        "from test_simulator import TestSimulator\n"
+        "\n"
+        "def custom_action(registers, inx, cell, func_code):\n"
+        "    return TestSimulator.custom_action3(_registers, _inx, cell, func_code)\n"
+        "\n"
+        "custom_actions_dict = {\n"
+        '    "custom3": custom_action\n'
+        "}"
+        "\n"
+    )
+    return module_contents
+
+
 class TestSimulator:
-    """Unittest for the pymodbus.Simutor module."""
+    """Unittest for the pymodbus.Simulator module."""
 
     default_device = {
         "setup": {
@@ -56,8 +85,8 @@ class TestSimulator:
             5,
             [7, 8],
             [16, 18],
-            [21, 26],
-            [33, 38],
+            [21, 27],
+            [34, 39],
         ],
         "bits": [
             5,
@@ -76,28 +105,29 @@ class TestSimulator:
                 "action": "increment",
                 "args": {"minval": 1, "maxval": 100},
             },
+            {"addr": 21, "value": 0xAAAA, "action": "custom3"},
         ],
         "uint32": [
-            {"addr": [21, 22], "value": 3124},
-            {"addr": [23, 26], "value": 5678},
-            {"addr": [27, 30], "value": 345000, "action": "increment"},
+            {"addr": [22, 23], "value": 3124},
+            {"addr": [24, 27], "value": 5678},
+            {"addr": [28, 31], "value": 345000, "action": "increment"},
             {
-                "addr": [31, 32],
+                "addr": [32, 33],
                 "value": 50,
                 "action": "random",
                 "parameters": {"minval": 10, "maxval": 80},
             },
         ],
         "float32": [
-            {"addr": [33, 34], "value": 3124.5},
-            {"addr": [35, 38], "value": 5678.19},
-            {"addr": [39, 42], "value": 345000.18, "action": "increment"},
+            {"addr": [34, 35], "value": 3124.5},
+            {"addr": [36, 39], "value": 5678.19},
+            {"addr": [40, 43], "value": 345000.18, "action": "increment"},
         ],
         "string": [
-            {"addr": [43, 44], "value": "Str"},
-            {"addr": [45, 48], "value": "Strxyz12"},
+            {"addr": [44, 45], "value": "Str"},
+            {"addr": [46, 49], "value": "Strxyz12"},
         ],
-        "repeat": [{"addr": [0, 48], "to": [49, 147]}],
+        "repeat": [{"addr": [0, 49], "to": [50, 149]}],
     }
 
     default_server = {
@@ -140,6 +170,7 @@ class TestSimulator:
         Cell(type=CellType.UINT16, access=True, value=5678),
         Cell(type=CellType.UINT16, value=14661, action=1),
         Cell(type=CellType.UINT16, value=14661, action=1),  # 20
+        Cell(type=CellType.UINT16, access=True, value=0xAAAA, action=8),
         Cell(type=CellType.UINT32, access=True),
         Cell(type=CellType.NEXT, access=True, value=3124),
         Cell(type=CellType.UINT32, access=True),
@@ -148,8 +179,8 @@ class TestSimulator:
         Cell(type=CellType.NEXT, access=True, value=5678),
         Cell(type=CellType.UINT32, value=5, action=1),
         Cell(type=CellType.NEXT, value=17320),
-        Cell(type=CellType.UINT32, value=5, action=1),
-        Cell(type=CellType.NEXT, value=17320),  # 30
+        Cell(type=CellType.UINT32, value=5, action=1),  # 30
+        Cell(type=CellType.NEXT, value=17320),
         Cell(
             type=CellType.UINT32, action=2, action_parameters={"minval": 10, "maxval": 80}
         ),
@@ -160,8 +191,8 @@ class TestSimulator:
         Cell(type=CellType.NEXT, access=True, value=29061),
         Cell(type=CellType.FLOAT32, access=True, value=17841),
         Cell(type=CellType.NEXT, access=True, value=29061),
-        Cell(type=CellType.FLOAT32, value=18600, action=1),
-        Cell(type=CellType.NEXT, value=29958),  # 40
+        Cell(type=CellType.FLOAT32, value=18600, action=1),  # 40
+        Cell(type=CellType.NEXT, value=29958),
         Cell(type=CellType.FLOAT32, value=18600, action=1),
         Cell(type=CellType.NEXT, value=29958),
         Cell(type=CellType.STRING, value=int.from_bytes(bytes("St", "utf-8"), "big")),
@@ -170,7 +201,7 @@ class TestSimulator:
         Cell(type=CellType.NEXT, value=int.from_bytes(bytes("rx", "utf-8"), "big")),
         Cell(type=CellType.NEXT, value=int.from_bytes(bytes("yz", "utf-8"), "big")),
         Cell(type=CellType.NEXT, value=int.from_bytes(bytes("12", "utf-8"), "big")),
-        # 48 MAX before repeat
+        # 49 MAX before repeat
     ]
 
     @staticmethod
@@ -181,16 +212,17 @@ class TestSimulator:
         return base_ports[__class__.__name__]
 
     @classmethod
-    def custom_action1(cls, _inx, _cell):
+    def custom_action1(cls, _registers, _inx, _cell, _func_code):
         """Test action."""
 
     @classmethod
-    def custom_action2(cls, _inx, _cell):
+    def custom_action2(cls, _registers, _inx, _cell, _func_code):
         """Test action."""
 
     custom_actions = {
         "custom1": custom_action1,
         "custom2": custom_action2,
+        "custom3": custom_action3,
     }
 
     @pytest.fixture(name="device")
@@ -211,7 +243,7 @@ class TestSimulator:
         return server
 
     @pytest.fixture(name="simulator_server")
-    async def setup_simulator_server(self, server, device, unused_tcp_port):
+    async def setup_simulator_server(self, server, device, unused_tcp_port, tmp_path):
         """Mock open for simulator server."""
         with patch(
             "builtins.open",
@@ -224,13 +256,22 @@ class TestSimulator:
                 )
             )
         ):
-            task = ModbusSimulatorServer(http_port=unused_tcp_port)
+            test_tmp_path = tmp_path / "test_simulator_server_tcp"
+            test_tmp_path.mkdir()
+            custom_actions_module_path = test_tmp_path / "test_custom_actions.py"
+            sys.path.append(str(test_tmp_path))
+            custom_actions_module_path.write_text(
+                custom_actions_test_module(), encoding="utf-8"
+            )
+
+            task = ModbusSimulatorServer(http_port=unused_tcp_port, custom_actions_module="test_custom_actions")
             await task.run_forever(only_start=True)
             await asyncio.sleep(0.5)
             task_future = task.serving
             yield task
             await task.stop()
             await task_future
+            sys.path.remove(str(test_tmp_path))
 
     def test_pack_unpack_values(self):
         """Test the pack unpack methods."""
@@ -248,7 +289,7 @@ class TestSimulator:
         """Test basic configuration."""
         # Manually build expected memory image and then compare.
         assert simulator.register_count == 250
-        for offset in (0, 49, 98):
+        for offset in (0, 50, 100):
             for i, test_cell in enumerate(self.test_registers):
                 reg = simulator.registers[i + offset]
                 assert reg.type == test_cell.type, f"at index {i} - {offset}"
@@ -271,12 +312,12 @@ class TestSimulator:
         device[Label.setup][Label.shared_blocks] = False
         device[Label.setup][Label.co_size] = 15
         device[Label.setup][Label.di_size] = 15
-        device[Label.setup][Label.hr_size] = 15
+        device[Label.setup][Label.hr_size] = 16
         device[Label.setup][Label.ir_size] = 15
         del device[Label.repeat]
         device[Label.repeat] = []
-        simulator = ModbusSimulatorContext(device, None)
-        assert simulator.register_count == 60
+        simulator = ModbusSimulatorContext(device, self.custom_actions)
+        assert simulator.register_count == 61
         for i, test_cell in enumerate(self.test_registers):
             reg = simulator.registers[i]
             assert reg.type == test_cell.type, f"at index {i}"
@@ -286,7 +327,7 @@ class TestSimulator:
         """Test exception for invalid configuration."""
         device["bad section"] = True
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     @pytest.mark.parametrize(
         ("entry"),
@@ -302,19 +343,19 @@ class TestSimulator:
         """Test exception for invalid configuration."""
         device[entry[0]].append(entry[1])
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_invalid_config3(self, device):
         """Test exception for invalid configuration."""
         del device[Label.type_bits]
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_invalid_config4(self, device):
         """Test exception for invalid configuration."""
         device[Label.type_string][1][Label.value] = "very long string again"
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_invalid_config5(self, device):
         """Test exception for invalid configuration."""
@@ -322,38 +363,38 @@ class TestSimulator:
             Label.type_bits
         ] = "bad action"
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_invalid_config6(self, device):
         """Test exception for invalid configuration."""
         device[Label.invalid].append(700)
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     @pytest.mark.parametrize(("entry"), [700, 1])
     def test_simulator_invalid_config7(self, entry, device):
         """Test exception for invalid configuration."""
         device[Label.write].append(entry)
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_invalid_config8(self, device):
         """Test exception for invalid configuration."""
         device[Label.type_bits].append(700)
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_invalid_config9(self, device):
         """Test exception for invalid configuration."""
         device[Label.repeat][0][Label.repeat_to] = [48, 500]
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_invalid_config10(self, device):
         """Test exception for invalid configuration."""
         device[Label.type_uint16].append(250)
         with pytest.raises(RuntimeError):
-            ModbusSimulatorContext(device, None)
+            ModbusSimulatorContext(device, self.custom_actions)
 
     def test_simulator_validate_illegal(self, simulator):
         """Test validation without exceptions."""
@@ -371,6 +412,7 @@ class TestSimulator:
             24,
             25,
             26,
+            27,
             31,
             32,
             33,
@@ -399,14 +441,14 @@ class TestSimulator:
                         continue
                 assert exp1, f"wrong legal at index {addr}"
                 assert exp2, f"wrong legal at second index {addr+1}"
-        addr = 27
+        addr = 28
         exp1 = simulator.validate(FX_WRITE_REG, addr, 1)
         assert not exp1, f"wrong legal at index {addr}"
 
     def test_simulator_validate_type(self, device):
         """Test validate call."""
         device["setup"]["type exception"] = True
-        exc_simulator = ModbusSimulatorContext(device, None)
+        exc_simulator = ModbusSimulatorContext(device, self.custom_actions)
 
         for entry in (
             (FX_READ_BIT, 80, 1, True),
@@ -415,11 +457,12 @@ class TestSimulator:
             (FX_READ_BIT, 128, 17, False),
             (FX_READ_BIT, 256, 1, True),
             (FX_READ_REG, 16, 1, True),
-            (FX_READ_REG, 43, 1, True),
-            (FX_READ_REG, 21, 1, False),
-            (FX_READ_REG, 21, 2, True),
-            (FX_READ_REG, 43, 2, True),
-            (FX_READ_REG, 45, 4, True),
+            (FX_READ_REG, 44, 1, True),
+            (FX_READ_REG, 22, 1, False),
+            (FX_READ_REG, 22, 2, True),
+            (FX_READ_REG, 44, 2, True),
+            (FX_READ_REG, 46, 4, True),
+            (FX_READ_REG, 21, 1, True),
         ):
             validated = exc_simulator.validate(entry[0], entry[1], entry[2])
             assert entry[3] == validated, f"at entry {entry}"
@@ -433,13 +476,15 @@ class TestSimulator:
             (FX_READ_BIT, 198, 4, [True, False, True, True]),
             (FX_READ_REG, 19, 1, [14662]),
             (FX_READ_REG, 16, 2, [3124, 5678]),
+            (FX_READ_REG, 16, 2, [3124, 5678]),
+            (FX_READ_REG, 21, 1, [0xAAAA]),
         ):
             values = simulator.getValues(entry[0], entry[1], entry[2])
             assert entry[3] == values, f"at entry {entry}"
 
     def test_simulator_set_values(self, device):
         """Test simulator set values."""
-        exc_simulator = ModbusSimulatorContext(device, None)
+        exc_simulator = ModbusSimulatorContext(device, self.custom_actions)
         value = [31234]
         exc_simulator.setValues(FX_WRITE_REG, 16, value)
         result = exc_simulator.getValues(FX_READ_REG, 16, 1)
@@ -461,22 +506,27 @@ class TestSimulator:
         assert result == [True, False, False]
         exc_simulator.setValues(FX_WRITE_BIT, 80, [True] * 17)
 
+        value = [0x5555]
+        exc_simulator.setValues(FX_WRITE_REG, 21, [0xAAAA])
+        result = exc_simulator.getValues(FX_READ_REG, 21)
+        assert result == value
+
     def test_simulator_get_text(self, simulator):
         """Test get_text_register()."""
         for test_reg, test_entry, test_cell in (
             (1, "1", Cell(type=Label.invalid, action="none", value="0")),
             (5, "5", Cell(type=Label.type_bits, action="none", value="0x708")),
             (
-                31,
-                "31-32",
+                32,
+                "32-33",
                 Cell(
                     type=Label.type_uint32,
                     action="random({'minval': 10, 'maxval': 80})",
                     value="50",
                 ),
             ),
-            (33, "33-34", Cell(type=Label.type_float32, action="none", value="3124.5")),
-            (43, "43-44", Cell(type=Label.type_string, action="none", value="Str ")),
+            (34, "34-35", Cell(type=Label.type_float32, action="none", value="3124.5")),
+            (44, "44-45", Cell(type=Label.type_string, action="none", value="Str ")),
         ):
             reg = simulator.registers[test_reg]
             entry, cell = simulator.get_text_register(test_reg)
@@ -493,8 +543,8 @@ class TestSimulator:
         [
             (FX_READ_BIT, 12),
             (FX_READ_REG, 16),
-            (FX_READ_REG, 21),
-            (FX_READ_REG, 33),
+            (FX_READ_REG, 22),
+            (FX_READ_REG, 34),
         ],
     )
     @pytest.mark.parametrize(
@@ -507,7 +557,7 @@ class TestSimulator:
     )
     def test_simulator_actions(self, func, addr, action, device):
         """Test actions."""
-        exc_simulator = ModbusSimulatorContext(device, None)
+        exc_simulator = ModbusSimulatorContext(device, self.custom_actions)
         reg1 = exc_simulator.registers[addr]
         reg2 = exc_simulator.registers[addr + 1]
         reg1.action = exc_simulator.action_name_to_id[action]
@@ -520,7 +570,7 @@ class TestSimulator:
 
     def test_simulator_action_timestamp(self, device):
         """Test action timestamp."""
-        exc_simulator = ModbusSimulatorContext(device, None)
+        exc_simulator = ModbusSimulatorContext(device, self.custom_actions)
         addr = 12
         exc_simulator.registers[addr].action = exc_simulator.action_name_to_id[
             Label.timestamp
@@ -529,7 +579,7 @@ class TestSimulator:
 
     def test_simulator_action_reset(self, device):
         """Test action reset."""
-        exc_simulator = ModbusSimulatorContext(device, None)
+        exc_simulator = ModbusSimulatorContext(device, self.custom_actions)
         addr = 12
         exc_simulator.registers[addr].action = exc_simulator.action_name_to_id[
             Label.reset
@@ -554,7 +604,7 @@ class TestSimulator:
         self, celltype, minval, maxval, value, expected, device
     ):
         """Test action increment."""
-        exc_simulator = ModbusSimulatorContext(device, None)
+        exc_simulator = ModbusSimulatorContext(device, self.custom_actions)
         action = exc_simulator.action_name_to_id[Label.increment]
         parameters = {
             "minval": minval,
@@ -601,7 +651,7 @@ class TestSimulator:
     )
     def test_simulator_action_random(self, celltype, minval, maxval, device):
         """Test action random."""
-        exc_simulator = ModbusSimulatorContext(device, None)
+        exc_simulator = ModbusSimulatorContext(device, self.custom_actions)
         action = exc_simulator.action_name_to_id[Label.random]
         parameters = {
             "minval": minval,
@@ -631,7 +681,6 @@ class TestSimulator:
     async def test_simulator_server_tcp(self, simulator_server):
         """Test init simulator server."""
 
-
     async def test_simulator_server_end_to_end(self, simulator_server, use_port):
         """Test simulator server end to end."""
         client = AsyncModbusTcpClient(NULLMODEM_HOST, port=use_port)
@@ -644,16 +693,16 @@ class TestSimulator:
         """Test simulator server end to end."""
         client = AsyncModbusTcpClient(NULLMODEM_HOST, port=use_port)
         assert await client.connect()
-        result = await client.read_holding_registers(43, count=2)
+        result = await client.read_holding_registers(44, count=2)
         assert result.registers[0] == int.from_bytes(bytes("St", "utf-8"), "big")
         assert result.registers[1] == int.from_bytes(bytes("r ", "utf-8"), "big")
-        result = await client.read_holding_registers(43, count=6)
+        result = await client.read_holding_registers(44, count=6)
         assert result.registers[0] == int.from_bytes(bytes("St", "utf-8"), "big")
         assert result.registers[1] == int.from_bytes(bytes("r ", "utf-8"), "big")
         assert result.registers[2] == int.from_bytes(bytes("St", "utf-8"), "big")
         assert result.registers[3] == int.from_bytes(bytes("rx", "utf-8"), "big")
         assert result.registers[4] == int.from_bytes(bytes("yz", "utf-8"), "big")
         assert result.registers[5] == int.from_bytes(bytes("12", "utf-8"), "big")
-        result = await client.read_holding_registers(21, count=23)
+        result = await client.read_holding_registers(22, count=23)
         assert len(result.registers) == 23
         client.close()

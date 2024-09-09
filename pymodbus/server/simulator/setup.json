@@ -151,7 +151,8 @@
                 77
             ],
             "write": [
-                10
+                10,
+                2307
             ],
             "bits": [
                 10,
@@ -177,6 +178,11 @@
                     "value": 50,
                     "action": "random",
                     "parameters": {"minval": 45, "maxval": 55}
+                },
+                {"addr":  2307,
+                    "value": 21845,
+                    "action": "read_hr_always_return_value",
+                    "parameters": {"value":  21845}
                 }
             ],
             "uint32": [

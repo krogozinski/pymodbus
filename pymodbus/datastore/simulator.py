@@ -81,7 +81,7 @@ class Label:  # pylint: disable=too-many-instance-attributes
     timestamp: str = "timestamp"
     repeat_to: str = "to"
     type: str = "type"
-    type_bits = "bits"
+    type_bits: str = "bits"
     type_exception: str = "type exception"
     type_uint16: str = "uint16"
     type_uint32: str = "uint32"
@@ -591,7 +591,9 @@ class ModbusSimulatorContext(ModbusBaseSlaveContext):
                 reg = self.registers[i]
                 parameters = reg.action_parameters if reg.action_parameters else {}
                 if reg.action:
-                    self.action_methods[reg.action](self.registers, i, reg, **parameters)
+                    action_method = self.action_methods[reg.action]
+                    parameters.update({"func_code": func_code})
+                    action_method(self.registers, i, reg, **parameters)
                 self.registers[i].count_read += 1
                 result.append(reg.value)
         else:
@@ -603,9 +605,9 @@ class ModbusSimulatorContext(ModbusBaseSlaveContext):
                 reg = self.registers[i]
                 if reg.action:
                     parameters = reg.action_parameters or {}
-                    self.action_methods[reg.action](
-                        self.registers, i, reg, **parameters
-                    )
+                    action_method = self.action_methods[reg.action]
+                    parameters.update({"func_code": func_code})
+                    action_method(self.registers, i, reg, **parameters)
                 self.registers[i].count_read += 1
                 while count and bit_index < 16:
                     result.append(bool(reg.value & (2**bit_index)))
@@ -621,15 +623,24 @@ class ModbusSimulatorContext(ModbusBaseSlaveContext):
         """
         if func_code not in self._bits_func_code:
             real_address = self.fc_offset[func_code] + address
-            for value in values:
-                self.registers[real_address].value = value
-                self.registers[real_address].count_write += 1
-                real_address += 1
+            count = len(values)
+            value = (v for v in values)
+            for i in range(real_address, real_address + count):
+                reg = self.registers[i]
+                reg.value = next(value)
+                reg.count_write += 1
+                if reg.action:
+                    action_method = self.action_methods[reg.action]
+                    parameters = reg.action_parameters if reg.action_parameters else {}
+                    parameters.update({"func_code": func_code})
+                    action_method(self.registers, i, reg, **parameters)
             return
 
         # bit access
         real_address = self.fc_offset[func_code] + int(address / 16)
         bit_index = address % 16
+        count = len(values)
+        reg_count = int((count + bit_index + 15) / 16)
         for value in values:
             bit_mask = 2**bit_index
             if bool(value):
@@ -641,6 +652,13 @@ class ModbusSimulatorContext(ModbusBaseSlaveContext):
             if bit_index == 16:
                 bit_index = 0
                 real_address += 1
+        for i in range(real_address, real_address + reg_count):
+            reg = self.registers[i]
+            if reg.action:
+                action_method = self.action_methods[reg.action]
+                parameters = reg.action_parameters if reg.action_parameters else {}
+                parameters.update({"func_code": func_code})
+                action_method(self.registers, i, reg, **parameters)
         return
 
     # --------------------------------------------
@@ -648,7 +666,7 @@ class ModbusSimulatorContext(ModbusBaseSlaveContext):
     # --------------------------------------------
 
     @classmethod
-    def action_random(cls, registers, inx, cell, minval=1, maxval=65536):
+    def action_random(cls, registers, inx, cell, minval=1, maxval=65536, **_parameters):
         """Update with random value.
 
         :meta private:
@@ -669,7 +687,7 @@ class ModbusSimulatorContext(ModbusBaseSlaveContext):
             registers[inx + 1].value = regs[1]
 
     @classmethod
-    def action_increment(cls, registers, inx, cell, minval=None, maxval=None):
+    def action_increment(cls, registers, inx, cell, minval=None, maxval=None, **_parameters):
         """Increment value reset with overflow.
 
         :meta private:

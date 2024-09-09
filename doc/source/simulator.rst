@@ -30,6 +30,12 @@ The REST API allow the test process to be automated
 - check the result with another simple REST API command,
 - test your client app in a true end-to-end fashion.
 
+Custom actions allow users to attach their own functions
+to the simulator
+
+- execute a user-provided function when a request to a specific register address is received,
+- perform a different action depending on the request function code.
+
 .. toctree::
    :maxdepth: 4
    :hidden:
@@ -38,3 +44,4 @@ The REST API allow the test process to be automated
    library/simulator/datastore
    library/simulator/web
    library/simulator/restapi
+   library/simulator/customactions

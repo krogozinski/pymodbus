@@ -8,6 +8,7 @@ API changes 3.8.0
 - Remove skip_encode parameter.
 - rename ModbusExceptions enums to legal constants.
 - enforce client keyword only parameters (positional not allowed).
+- simulator custom action function signatures with keywords arguments require a trailing unpacked dictionary parameter.
 
 
 API changes 3.7.0

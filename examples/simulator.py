@@ -37,6 +37,10 @@ async def read_registers(
         assert minval <= value <= maxval, f"{minval} <= {value} <= {maxval}"
 
 
+async def write_register(client, addr):
+    _wr = await client.write_register(addr, 0xA5A5)
+
+
 async def run_calls(client, count):
     """Run client calls."""
     _logger.info("### Read fixed/increment/random value of different types.")
@@ -56,6 +60,11 @@ async def run_calls(client, count):
         await read_registers(client, 4876, 2, False, curval=50000.0 + count)
         await read_registers(client, 4878, 2, False, minval=45000.0, maxval=55000.0)
 
+    _logger.info("### Write to single register with simulator custom action.")
+    for c in range(count := 5):
+        _logger.info(f"--> Count {c+1} of {count}")
+        await write_register(client, 2307)
+
 
 async def run_simulator():
     """Run server."""
@@ -65,6 +74,8 @@ async def run_simulator():
         "device_try",
         "--modbus_server",
         "server",
+        "--custom_actions",
+        "custom_actions"
     ]
     cmd_args = get_simulator_commandline(cmdline=cmdline)
     task = ModbusSimulatorServer(**cmd_args)
